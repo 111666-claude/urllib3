@@ -1,0 +1,8 @@
+Fixed ``PoolManager.urlopen()`` not rewinding a seekable request body when a
+redirect that keeps the body (307/308, or 301/302 for non-GET methods) was
+followed across separate connection pools. The body's starting position is now
+recorded before the first send and forwarded to every redirect hop, so an
+already-consumed file-like body is replayed in full instead of as an empty
+body. Bodies whose position cannot be recorded (for example ``tell()`` raises)
+keep their previous behavior and are not affected on a 303, which drops the
+body.

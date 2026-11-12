@@ -464,6 +464,25 @@ class PoolManager(RequestMethods):
         if "headers" not in kw:
             kw["headers"] = self.headers
 
+        # Record the body's starting position before the first send so that a
+        # redirect that keeps the body (307/308, or 301/302 for non-GET) can
+        # rewind it. PoolManager follows redirects through separate
+        # ConnectionPool.urlopen() calls, which do not share the pool's local
+        # body position, so without this an exhausted seekable body would be
+        # replayed as empty. A position supplied by the caller is respected.
+        # This is best-effort: if the position cannot be recorded (for example
+        # tell() raises) body_pos stays unset, which leaves a 303 (that drops
+        # the body) unaffected while a 307 simply cannot rewind that body.
+        if (
+            kw.get("body") is not None
+            and kw.get("body_pos") is None
+            and getattr(kw["body"], "tell", None) is not None
+        ):
+            try:
+                kw["body_pos"] = kw["body"].tell()
+            except OSError:
+                kw["body_pos"] = None
+
         if self._proxy_requires_url_absolute_form(u):
             # Strip the fragment here but let the connection pool normalize the URL
             # to avoid decoding IPv6 zone identifiers twice.
